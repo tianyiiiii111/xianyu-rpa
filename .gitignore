@@ -1,0 +1,26 @@
+# 依赖项
+node_modules/
+
+# 数据文件
+data/
+
+# 环境变量
+.env
+
+# 日志
+logs/
+
+# 截图
+screenshots/
+
+# Cookie
+cookies/
+
+# IDE 文件
+.vscode/
+.idea/
+.trae/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
