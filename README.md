@@ -26,6 +26,8 @@
 2. **安装依赖**：
    ```bash
    npm install
+   # 安装Playwright浏览器驱动
+   npx playwright install 
    ```
 
 3. **启动服务**：

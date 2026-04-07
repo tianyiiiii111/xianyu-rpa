@@ -5,8 +5,8 @@ import { checkForbiddenWords } from './src/services/AiServes.js';
 import { StorageService } from './src/utils/storage.js';
 import { loginAndSaveCookie } from './src/services/LoginServies.js';  
 
-const cookieName = await loginAndSaveCookie();
-console.log(cookieName);
+// const cookieName = await loginAndSaveCookie();
+// console.log(cookieName);
 
 // 测试搜索商品
 // searchProducts('Ai接口','huazhongkandianyingdehaitunsha').then(results => {
