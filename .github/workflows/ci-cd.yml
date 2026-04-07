@@ -22,3 +22,5 @@ jobs:
     
     - name: Run tests
       run: node test.js
+      env:
+        ALIBABA_CLOUD_API_KEY: ${{ secrets.ALIBABA_CLOUD_API_KEY }}
