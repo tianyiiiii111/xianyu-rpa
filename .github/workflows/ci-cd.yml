@@ -22,23 +22,3 @@ jobs:
     
     - name: Run tests
       run: node test.js
-      
-  # deploy:
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   steps:
-  #   - uses: actions/checkout@v4
-    
-  #   - name: Setup Node.js
-  #     uses: actions/setup-node@v4
-  #     with:
-  #       node-version: '24'
-    
-  #   - name: Install dependencies
-  #     run: npm install
-    
-  #   - name: Build project
-  #     run: npm run build
-      
-    # 这里可以添加部署步骤，例如部署到云服务

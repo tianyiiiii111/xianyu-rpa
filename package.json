@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "login": "node src/login.js",
-    "publish": "node src/publish.js",
-    "queue": "node src/queue.js"
+    "test": "node test.js"
   },
   "dependencies": {
     "bullmq": "^5.7.0",
@@ -17,7 +15,5 @@
     "playwright": "^1.44.0",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
-  },
-  "server": "node src/server.js",
-  "check": "node src/checker.js"
+  }
 }
