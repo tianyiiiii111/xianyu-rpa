@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Redis 服务
+  redis:
+    image: redis:7-alpine
+    container_name: xianyu-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - xianyu-network
+
+  # 主应用
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xianyu-rpa
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # 必需的环境变量
+      - ALIBABA_CLOUD_API_KEY=${ALIBABA_CLOUD_API_KEY}
+      
+      # Redis配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      
+      # 日志配置
+      - LOG_LEVEL=info
+      
+      # 爬虫配置
+      - CRAWLER_HEADLESS=true
+      - CRAWLER_MAX_PRODUCTS=20
+      
+      # 闲鱼配置
+      - XIANYU_BASE_URL=https://www.goofish.com
+    volumes:
+      - ./cookies:/app/cookies
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./screenshots:/app/screenshots
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - xianyu-network
+    shm_size: '2gb'
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  xianyu-network:
+    driver: bridge

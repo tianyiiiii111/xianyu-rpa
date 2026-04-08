@@ -135,8 +135,8 @@ async function fillDescription(page, rawDescription) {
     }
 
     // 2. 基础字符净化 (防止特殊不可见字符导致浏览器崩溃)
-    // 保留汉字、英文字母、数字、空格、换行以及常用的 UI 装饰符号(Emoji)
-    finalContent = finalContent.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\r\t.,，。！？!?；;：:（）()【】[\]"“”-]/g, '');
+    // 保留汉字、英文字母、数字、空格、换行以及常用中文标点和符号
+    finalContent = finalContent.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\r\t.,，。！？!?；;：:（）()【】[\]"「」""'-]/g, '');
 
     // 3. 网页操作：定位输入框
     const editableDiv = page.locator('[contenteditable="true"]').first();

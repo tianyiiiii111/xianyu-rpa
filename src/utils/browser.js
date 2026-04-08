@@ -6,11 +6,6 @@
  * 2. 保存和加载 cookies
  * 3. 模拟人类操作延迟
  * 4. 截图功能
- * 
- * 注释说明：
- * - 本文件是浏览器操作的工具模块，提供浏览器相关的功能
- * - 代码中添加了详细的注释，确保小白能理解
- * - 支持无头模式和有头模式
  */
 
 import playwright from 'playwright';
@@ -27,6 +22,18 @@ const SCREENSHOTS_DIR = path.join(ROOT, 'screenshots');
 fs.mkdirSync(COOKIES_DIR, { recursive: true });
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
+// 常用User-Agent列表
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
+];
+
+function getRandomUserAgent() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
 /**
  * 创建浏览器实例
  * @param {string} accountId - 账号ID，默认 'account1'
@@ -35,6 +42,8 @@ fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
  */
 export async function createBrowser(accountId = '', headless = false) {
   console.log(`  🖥️  启动浏览器 (账号: ${accountId})`);
+  
+  const userAgent = getRandomUserAgent();
   
   const browser = await playwright.chromium.launch({
     headless: headless,
@@ -45,12 +54,45 @@ export async function createBrowser(accountId = '', headless = false) {
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process'
     ]
   });
 
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    userAgent: userAgent,
+    locale: 'zh-CN',
+    timezoneId: 'Asia/Shanghai',
+    viewport: { width: 1280, height: 720 },
+    deviceScaleFactor: 1,
+    hasTouch: false,
+    isMobile: false,
+    permissions: ['geolocation'],
+    ignoreHTTPSErrors: true
+  });
+
+  // 添加反检测脚本
+  await context.addInitScript(() => {
+    // 覆盖webdriver属性
+    Object.defineProperty(navigator, 'webdriver', {
+      get: () => undefined
+    });
+    // 覆盖plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5]
+    });
+    // 覆盖languages
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['zh-CN', 'zh', 'en']
+    });
+  });
+
   const page = await context.newPage();
+
+  // 设置默认超时
+  page.setDefaultTimeout(30000);
+  page.setDefaultNavigationTimeout(30000);
 
   // 加载 cookies
   const cookiePath = path.join(COOKIES_DIR, `${accountId}.json`);

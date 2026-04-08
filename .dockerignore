@@ -1,0 +1,41 @@
+# 依赖
+node_modules
+npm-debug.log
+npm-debug.*
+
+# 开发文件
+.git
+.gitignore
+*.md
+!README.md
+test.js
+.DS_Store
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 环境文件
+.env
+.env.local
+.env.*.local
+*.env
+
+# 测试和日志
+coverage
+*.log
+*.tmp
+
+# 备份
+backups
+*.bak
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 文档
+docs/

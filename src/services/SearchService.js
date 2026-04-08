@@ -6,15 +6,47 @@
  * 2. 抓取搜索结果并存储
  * 3. 管理搜索历史
  * 4. 编辑已采集的商品信息
- * 
- * 注释说明：
- * - 本文件是搜索服务的核心模块，负责商品的批量采集和管理
- * - 代码中添加了详细的注释，确保小白能理解
- * - 支持模拟数据和真实数据两种模式
  */
 
 import { createBrowser, humanDelay } from '../utils/browser.js';
 import { StorageService } from '../utils/storage.js';
+
+// 备选选择器列表 - 按优先级排列，自动降级
+const PRODUCT_SELECTORS = [
+  // 动态类名 (带哈希)
+  '.feeds-item-wrap--rGdH_KoF',
+  // 通用商品卡片选择器
+  '[class*="feeds-item"]',
+  '[class*="product-item"]',
+  '[class*="item-card"]',
+  // 基于结构的选择器
+  '.goods-list .goods-item',
+  '.product-list .item',
+  // 最后的备选方案
+  '.ant-list-item'
+];
+
+// 商品详情选择器映射
+const DETAIL_SELECTORS = {
+  price: [
+    '.price--OEWLbcxC',
+    '[class*="price"]',
+    '.goods-price',
+    '.product-price'
+  ],
+  description: [
+    '.main--Nu33bWl6',
+    '[class*="description"]',
+    '.goods-desc',
+    '.product-description'
+  ],
+  images: [
+    '.item-main-window-list--od7DK4Fm img',
+    '[class*="main-window"] img',
+    '.goods-images img',
+    '.product-images img'
+  ]
+};
 
 /**
  * 搜索商品
@@ -79,18 +111,40 @@ async function scrapeSearchResults(page) {
 
   console.log('  📦 开始抓取搜索结果...');
 
-  // 使用 page.evaluate 在浏览器上下文中获取元素的 href 属性
+  // 使用备选选择器列表尝试获取商品元素
   const productLinks = await page.evaluate(() => {
-    console.log('  📦 开始抓取商品链接...');
-    // 获取所有匹配的元素
-    const items = document.querySelectorAll('.feeds-item-wrap--rGdH_KoF');
-    console.log(`  📦 找到 ${items.length} 个商品元素`);
+    // 尝试多个选择器
+    const selectors = [
+      '.feeds-item-wrap--rGdH_KoF',
+      '[class*="feeds-item"]',
+      '[class*="product-item"]',
+      '[class*="item-card"]',
+      '.goods-list .goods-item',
+      '.ant-list-item'
+    ];
+    
+    let items = [];
+    for (const selector of selectors) {
+      items = document.querySelectorAll(selector);
+      if (items.length > 0) {
+        console.log(`  📦 使用选择器 "${selector}" 找到 ${items.length} 个商品元素`);
+        break;
+      }
+    }
+    
     // 提取每个元素的 href 属性
     const links = [];
     items.forEach(item => {
       const href = item.getAttribute('href');
       if (href) {
         links.push(href);
+      }
+      // 如果没有href，尝试从内部链接获取
+      if (!href) {
+        const link = item.querySelector('a[href]');
+        if (link) {
+          links.push(link.getAttribute('href'));
+        }
       }
     });
     return links;
@@ -113,20 +167,41 @@ async function scrapeSearchResults(page) {
       // 等待页面加载
       await humanDelay(1500, 2500);
 
-      // 提取商品信息
+      // 提取商品信息 - 使用备选选择器
       const productInfo = await page.evaluate(() => {
-        // 获取商品价格
-        const priceEl = document.querySelector('.price--OEWLbcxC ');
-        const priceText = priceEl ? priceEl.textContent.trim() : '0';
-        const price = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+        // 尝试多个价格选择器
+        const priceSelectors = ['.price--OEWLbcxC', '[class*="price"]', '.goods-price', '.product-price'];
+        let price = 0;
+        for (const sel of priceSelectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const priceText = el.textContent.trim();
+            price = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+            if (price > 0) break;
+          }
+        }
 
-        // 获取商品描述
-        const descEl = document.querySelector('.main--Nu33bWl6');
-        const description = descEl ? descEl.textContent.trim() : '';
+        // 尝试多个描述选择器
+        const descSelectors = ['.main--Nu33bWl6', '[class*="description"]', '.goods-desc', '.product-description'];
+        let description = '';
+        for (const sel of descSelectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            description = el.textContent.trim();
+            if (description) break;
+          }
+        }
 
-        // 获取商品图片
-        const imgEls = document.querySelectorAll('.item-main-window-list--od7DK4Fm img');
-        const images = Array.from(imgEls).slice(0, 5).map(img => img.src).filter(src => src);
+        // 尝试多个图片选择器
+        const imgSelectors = ['.item-main-window-list--od7DK4Fm img', '[class*="main-window"] img', '.goods-images img', '.product-images img'];
+        const images = [];
+        for (const sel of imgSelectors) {
+          const imgEls = document.querySelectorAll(sel);
+          if (imgEls.length > 0) {
+            images.push(...Array.from(imgEls).slice(0, 5).map(img => img.src).filter(src => src));
+            if (images.length > 0) break;
+          }
+        }
 
         return {
           price,
