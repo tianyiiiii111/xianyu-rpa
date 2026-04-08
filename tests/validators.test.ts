@@ -10,6 +10,63 @@ import {
   validate 
 } from '../src/utils/validators.js';
 
+describe('验证器测试', () => {
+  it('searchSchema - 有效数据', () => {
+    const data = { keyword: 'iPhone', accountId: '' };
+    const { error } = validate(searchSchema, data);
+    expect(error).toBeUndefined();
+  });
+
+  it('searchSchema - 缺少关键词', () => {
+    const data = { accountId: '' };
+    const { error } = validate(searchSchema, data);
+    expect(error).toBeDefined();
+  });
+
+  it('searchSchema - 关键词过长', () => {
+    const data = { keyword: 'a'.repeat(101) };
+    const { error } = validate(searchSchema, data);
+    expect(error).toBeDefined();
+  });
+
+  it('publishSchema - 有效数据', () => {
+    const data = { searchId: '123', accountId: '' };
+    const { error } = validate(publishSchema, data);
+    expect(error).toBeUndefined();
+  });
+
+  it('publishSchema - 缺少searchId', () => {
+    const data = { accountId: '' };
+    const { error } = validate(publishSchema, data);
+    expect(error).toBeDefined();
+  });
+
+  it('singlePublishSchema - 有效商品数据', () => {
+    const data = {
+      product: {
+        price: 100,
+        description: '测试商品',
+        images: []
+      },
+      accountId: ''
+    };
+    const { error } = validate(singlePublishSchema, data);
+    expect(error).toBeUndefined();
+  });
+
+  it('singlePublishSchema - 价格无效', () => {
+    const data = {
+      product: {
+        price: -10,
+        description: '测试商品'
+      },
+      accountId: ''
+    };
+    const { error } = validate(singlePublishSchema, data);
+    expect(error).toBeDefined();
+  });
+});
+
 describe('searchSchema 搜索验证', () => {
   it('应该通过有效的搜索参数', () => {
     const { error, value } = validate(searchSchema, { 

@@ -24,3 +24,11 @@ cookies/
 # 操作系统文件
 .DS_Store
 Thumbs.db
+
+# TypeScript build
+dist/
+*.tsbuildinfo
+
+# Test
+.env.test
+coverage/

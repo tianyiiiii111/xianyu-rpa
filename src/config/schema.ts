@@ -1,74 +1,75 @@
 /**
- * config/schema.js - 环境变量类型校验
- * 
- * 使用Zod进行类型安全的配置验证
+ * config/schema.ts - 环境变量类型校验
  */
 
 import { z } from 'zod';
 import 'dotenv/config';
 
-/**
- * 环境变量验证模式
- */
-export const envSchema = z.object({
-  // 必需变量
+// 环境变量验证模式 - 使用字符串默认值
+const envSchemaInternal = z.object({
   ALIBABA_CLOUD_API_KEY: z.string().min(1, 'ALIBABA_CLOUD_API_KEY is required'),
-  
-  // 可选字符串变量
   PORT: z.string().default('3000'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  
-  // 闲鱼配置
   XIANYU_BASE_URL: z.string().url().default('https://www.goofish.com'),
   XIANYU_TIMEOUT: z.string().default('30000'),
-  
-  // 爬虫配置
   CRAWLER_HEADLESS: z.enum(['true', 'false']).default('false'),
   CRAWLER_MAX_PRODUCTS: z.string().default('20'),
   CRAWLER_RETRY: z.string().default('3'),
-  
-  // 发布配置
   PUBLISH_MAX_CONCURRENT: z.string().default('1'),
   PUBLISH_DELAY_MIN: z.string().default('5000'),
   PUBLISH_DELAY_MAX: z.string().default('10000'),
-  
-  // 存储配置
   STORAGE_BACKUP_RETENTION: z.string().default('10'),
   STORAGE_CLEANUP_DAYS: z.string().default('7'),
-  
-  // Redis配置
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.string().default('6379'),
   REDIS_PASSWORD: z.string().optional(),
-  
-  // 限流配置
   RATE_LIMIT_MAX: z.string().default('30'),
   RATE_LIMIT_SEARCH: z.string().default('10'),
   RATE_LIMIT_PUBLISH: z.string().default('5'),
-  
-  // AI配置
   AI_MODEL: z.string().default('qwen-plus'),
   AI_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/compatible-mode/v1'),
   AI_TIMEOUT: z.string().default('30000'),
-  
-  // 日志配置
   LOG_RETENTION_DAYS: z.string().default('30')
 });
 
+export type EnvConfig = {
+  ALIBABA_CLOUD_API_KEY: string;
+  PORT: number;
+  LOG_LEVEL: 'trace' | 'debug' | 'info' | 'warn' | 'error';
+  NODE_ENV: 'development' | 'production' | 'test';
+  XIANYU_BASE_URL: string;
+  XIANYU_TIMEOUT: number;
+  CRAWLER_HEADLESS: boolean;
+  CRAWLER_MAX_PRODUCTS: number;
+  CRAWLER_RETRY: number;
+  PUBLISH_MAX_CONCURRENT: number;
+  PUBLISH_DELAY_MIN: number;
+  PUBLISH_DELAY_MAX: number;
+  STORAGE_BACKUP_RETENTION: number;
+  STORAGE_CLEANUP_DAYS: number;
+  REDIS_HOST: string;
+  REDIS_PORT: number;
+  REDIS_PASSWORD?: string;
+  RATE_LIMIT_MAX: number;
+  RATE_LIMIT_SEARCH: number;
+  RATE_LIMIT_PUBLISH: number;
+  AI_MODEL: string;
+  AI_BASE_URL: string;
+  AI_TIMEOUT: number;
+  LOG_RETENTION_DAYS: number;
+};
+
 /**
  * 解析并验证环境变量
- * @returns {Object} 验证后的配置对象
+ * @returns 验证后的配置对象
  */
-export function parseEnv() {
-  // 获取原始环境变量
+export function parseEnv(): EnvConfig {
   const rawEnv = { ...process.env };
   
   try {
-    // 验证并转换
-    const validated = envSchema.parse(rawEnv);
+    const validated = envSchemaInternal.parse(rawEnv);
     
-    // 转换为实际类型
     return {
       ALIBABA_CLOUD_API_KEY: validated.ALIBABA_CLOUD_API_KEY,
       PORT: parseInt(validated.PORT, 10),
@@ -102,7 +103,10 @@ export function parseEnv() {
         console.error(`  - ${err.path.join('.')}: ${err.message}`);
       });
       console.error('\n请检查 .env 文件配置');
-      process.exit(1);
+      // 测试环境下不退出
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
     }
     throw error;
   }
@@ -110,12 +114,12 @@ export function parseEnv() {
 
 /**
  * 验证配置并返回结果
- * @returns {{ success: boolean, data?: Object, errors?: Array }}
+ * @returns 验证结果
  */
-export function validateEnv() {
+export function validateEnv(): { success: boolean; data?: EnvConfig; errors?: Array<{ path: string; message: string }> } {
   const rawEnv = { ...process.env };
   
-  const result = envSchema.safeParse(rawEnv);
+  const result = envSchemaInternal.safeParse(rawEnv);
   
   if (result.success) {
     return { success: true, data: parseEnv() };
@@ -130,12 +134,6 @@ export function validateEnv() {
   };
 }
 
-// 导出验证后的配置
-export const validatedEnv = parseEnv();
+export const validatedEnv: EnvConfig = parseEnv();
 
-export default {
-  envSchema,
-  parseEnv,
-  validateEnv,
-  validatedEnv
-};
+export default { envSchemaInternal, parseEnv, validateEnv, validatedEnv };

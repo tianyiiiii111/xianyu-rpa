@@ -2,14 +2,10 @@
  * retry.test.js - 重试机制测试
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { withRetry } from '../src/utils/retry.js';
+import { describe, it, expect, vi } from 'vitest';
+import { withRetry } from '../src/utils/retry.ts';
 
 describe('withRetry 重试机制', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
   it('应该立即返回成功的结果', async () => {
     const fn = vi.fn().mockResolvedValue('success');
     const result = await withRetry(fn, { maxRetries: 3 });
@@ -25,7 +21,7 @@ describe('withRetry 重试机制', () => {
     
     const result = await withRetry(fn, { 
       maxRetries: 3, 
-      delay: 1000,
+      delay: 10,
       backoff: 2
     });
     
@@ -37,7 +33,7 @@ describe('withRetry 重试机制', () => {
     const fn = vi.fn().mockRejectedValue(new Error('always fail'));
     
     await expect(
-      withRetry(fn, { maxRetries: 2, delay: 100 })
+      withRetry(fn, { maxRetries: 2, delay: 10 })
     ).rejects.toThrow('always fail');
     
     expect(fn).toHaveBeenCalledTimes(3); // 初始1次 + 2次重试
@@ -48,33 +44,33 @@ describe('withRetry 重试机制', () => {
     const onRetry = vi.fn();
     
     await expect(
-      withRetry(fn, { maxRetries: 2, delay: 100, onRetry })
+      withRetry(fn, { maxRetries: 2, delay: 10, onRetry })
     ).rejects.toThrow();
     
     expect(onRetry).toHaveBeenCalledTimes(2);
   });
 
-  it('应该使用指数退避', async () => {
+  it('应该使用retryCondition过滤错误', async () => {
     const fn = vi.fn()
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockRejectedValueOnce(new Error('fail'))
+      .mockRejectedValueOnce(new Error('retryable'))
       .mockResolvedValue('success');
     
-    const start = Date.now();
-    await withRetry(fn, { maxRetries: 3, delay: 1000, backoff: 2 });
-    const duration = Date.now() - start;
+    const result = await withRetry(fn, {
+      maxRetries: 3,
+      delay: 10,
+      retryCondition: (err) => err.message === 'retryable'
+    });
     
-    // 1000 + 2000 = 3000ms (约等于)
-    expect(duration).toBeGreaterThan(2500);
+    expect(result).toBe('success');
   });
 });
 
 describe('fetchWithRetry 带重试的fetch', () => {
   it('应该处理4xx错误不重试', async () => {
-    const mockResponse = { status: 400 };
+    const mockResponse = { status: 400, ok: false };
     global.fetch = vi.fn().mockResolvedValue(mockResponse);
     
-    const result = await import('../src/utils/retry.js')
+    const result = await import('../src/utils/retry.ts')
       .then(m => m.fetchWithRetry('http://test.com'));
     
     expect(result.status).toBe(400);

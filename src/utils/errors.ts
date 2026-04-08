@@ -1,74 +1,51 @@
 /**
- * errors.js - 统一错误类型
- * 
- * 功能：
- * 1. 定义项目专用错误类
- * 2. 错误码标准化
- * 3. 错误处理中间件
+ * utils/errors.ts - 统一错误类型
  */
 
 // 错误码枚举
 export const ErrorCodes = {
-  // 通用错误 (1xxx)
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NOT_FOUND: 'NOT_FOUND',
   UNAUTHORIZED: 'UNAUTHORIZED',
-  
-  // 搜索相关 (2xxx)
   SEARCH_FAILED: 'SEARCH_FAILED',
   SEARCH_TIMEOUT: 'SEARCH_TIMEOUT',
   NO_SEARCH_RESULTS: 'NO_SEARCH_RESULTS',
-  
-  // 发布相关 (3xxx)
   PUBLISH_FAILED: 'PUBLISH_FAILED',
   PUBLISH_TIMEOUT: 'PUBLISH_TIMEOUT',
   LOGIN_REQUIRED: 'LOGIN_REQUIRED',
   COOKIE_EXPIRED: 'COOKIE_EXPIRED',
   PRODUCT_DATA_INVALID: 'PRODUCT_DATA_INVALID',
-  
-  // AI服务相关 (4xxx)
   AI_SERVICE_ERROR: 'AI_SERVICE_ERROR',
   AI_API_KEY_MISSING: 'AI_API_KEY_MISSING',
   AI_RATE_LIMIT: 'AI_RATE_LIMIT',
-  
-  // 网络相关 (5xxx)
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT_ERROR: 'TIMEOUT_ERROR',
-  
-  // 存储相关 (6xxx)
   STORAGE_ERROR: 'STORAGE_ERROR',
   FILE_NOT_FOUND: 'FILE_NOT_FOUND',
-  
-  // 队列相关 (7xxx)
   QUEUE_ERROR: 'QUEUE_ERROR',
   JOB_NOT_FOUND: 'JOB_NOT_FOUND',
   REDIS_CONNECTION_ERROR: 'REDIS_CONNECTION_ERROR'
-};
+} as const;
 
 // 错误类定义
 export class XianyuError extends Error {
-  /**
-   * @param {string} message - 错误消息
-   * @param {string} code - 错误码
-   * @param {Object} details - 额外详情
-   */
-  constructor(message, code = ErrorCodes.UNKNOWN_ERROR, details = {}) {
+  code: string;
+  details: Record<string, unknown>;
+  timestamp: string;
+
+  constructor(message: string, code: string = 'UNKNOWN_ERROR', details: Record<string, unknown> = {}) {
     super(message);
     this.name = 'XianyuError';
     this.code = code;
     this.details = details;
     this.timestamp = new Date().toISOString();
     
-    // 保持正确的堆栈跟踪
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, XianyuError);
     }
   }
 
-  /**
-   * 转换为JSON
-   */
   toJSON() {
     return {
       name: this.name,
@@ -81,52 +58,51 @@ export class XianyuError extends Error {
   }
 }
 
-// 特定错误类
 export class ValidationError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.VALIDATION_ERROR, details);
     this.name = 'ValidationError';
   }
 }
 
 export class NotFoundError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.NOT_FOUND, details);
     this.name = 'NotFoundError';
   }
 }
 
 export class NetworkError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.NETWORK_ERROR, details);
     this.name = 'NetworkError';
   }
 }
 
 export class TimeoutError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.TIMEOUT_ERROR, details);
     this.name = 'TimeoutError';
   }
 }
 
 export class StorageError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.STORAGE_ERROR, details);
     this.name = 'StorageError';
   }
 }
 
 export class QueueError extends XianyuError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, ErrorCodes.QUEUE_ERROR, details);
     this.name = 'QueueError';
   }
 }
 
 // 错误工厂函数
-export function createError(code, message, details = {}) {
-  const errorClasses = {
+export function createError(code: string, message: string, details: Record<string, unknown> = {}): XianyuError {
+  const errorClasses: Record<string, new (msg: string, d: Record<string, unknown>) => XianyuError> = {
     [ErrorCodes.VALIDATION_ERROR]: ValidationError,
     [ErrorCodes.NOT_FOUND]: NotFoundError,
     [ErrorCodes.NETWORK_ERROR]: NetworkError,
@@ -136,82 +112,17 @@ export function createError(code, message, details = {}) {
   };
   
   const ErrorClass = errorClasses[code] || XianyuError;
-  return new ErrorClass(message, details);
+  // 使用类型断言避免TypeScript错误
+  const err = new ErrorClass(message, details as never);
+  // 确保code属性被正确设置
+  if (code !== ErrorCodes.UNKNOWN_ERROR && !(code in errorClasses)) {
+    err.code = code;
+  }
+  return err;
 }
 
-// 错误处理中间件
-export function errorHandler(err, req, res, next) {
-  // 记录错误日志
-  console.error('❌ 错误:', {
-    name: err.name,
-    message: err.message,
-    code: err.code,
-    path: req.path,
-    method: req.method,
-    ...(err.details || {})
-  });
-  
-  // 处理XianyuError
-  if (err instanceof XianyuError) {
-    return res.status(getStatusCode(err.code)).json({
-      success: false,
-      error: {
-        name: err.name,
-        code: err.code,
-        message: err.message,
-        details: err.details,
-        timestamp: err.timestamp
-      }
-    });
-  }
-  
-  // 处理验证错误
-  if (err.name === 'ValidationError' || err.isJoi) {
-    return res.status(400).json({
-      success: false,
-      error: {
-        name: 'ValidationError',
-        code: ErrorCodes.VALIDATION_ERROR,
-        message: err.message,
-        details: err.details || err.details,
-        timestamp: new Date().toISOString()
-      }
-    });
-  }
-  
-  // 处理JWT等认证错误
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      success: false,
-      error: {
-        name: 'UnauthorizedError',
-        code: ErrorCodes.UNAUTHORIZED,
-        message: '未授权访问',
-        timestamp: new Date().toISOString()
-      }
-    });
-  }
-  
-  // 未知错误
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      name: err.name || 'Error',
-      code: ErrorCodes.UNKNOWN_ERROR,
-      message: process.env.NODE_ENV === 'production' 
-        ? '服务器内部错误' 
-        : err.message,
-      timestamp: new Date().toISOString()
-    }
-  });
-}
-
-/**
- * 根据错误码获取HTTP状态码
- */
-function getStatusCode(code) {
-  const statusMap = {
+function getStatusCode(code: string): number {
+  const statusMap: Record<string, number> = {
     [ErrorCodes.VALIDATION_ERROR]: 400,
     [ErrorCodes.NOT_FOUND]: 404,
     [ErrorCodes.UNAUTHORIZED]: 401,
@@ -226,7 +137,34 @@ function getStatusCode(code) {
   return statusMap[code] || 500;
 }
 
-// 导出
+// 错误处理中间件
+export function errorHandler(err: Error, req: unknown, res: unknown, _next: unknown) {
+  const httpRes = res as { status: (code: number) => { json: (data: unknown) => void } };
+  
+  console.error('❌ 错误:', {
+    name: err.name,
+    message: err.message,
+    ...(err instanceof XianyuError ? { code: err.code, details: err.details } : {})
+  });
+  
+  if (err instanceof XianyuError) {
+    return httpRes.status(getStatusCode(err.code)).json({
+      success: false,
+      error: err.toJSON()
+    });
+  }
+  
+  httpRes.status(500).json({
+    success: false,
+    error: {
+      name: err.name || 'Error',
+      code: ErrorCodes.UNKNOWN_ERROR,
+      message: process.env.NODE_ENV === 'production' ? '服务器内部错误' : err.message,
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+
 export default {
   ErrorCodes,
   XianyuError,

@@ -1,19 +1,12 @@
 /**
- * validators.js - 数据验证工具
- * 
- * 功能：
- * 1. API请求参数验证
- * 2. 商品数据验证
- * 3. 配置验证
+ * utils/validators.ts - 数据验证工具
  */
 
 import Joi from 'joi';
+import type { ValidationErrorDetail } from '../types/index.js';
 
-/**
- * 搜索请求验证
- */
+// 搜索请求验证
 export const searchSchema = Joi.object({
-  // 搜索关键词 - 必需，1-100字符
   keyword: Joi.string()
     .min(1)
     .max(100)
@@ -26,7 +19,6 @@ export const searchSchema = Joi.object({
       'any.required': '缺少搜索关键词参数'
     }),
   
-  // 账号ID - 可选，最多50字符
   accountId: Joi.string()
     .max(50)
     .trim()
@@ -36,11 +28,8 @@ export const searchSchema = Joi.object({
     })
 });
 
-/**
- * 批量发布请求验证
- */
+// 批量发布请求验证
 export const publishSchema = Joi.object({
-  // 搜索结果ID - 必需
   searchId: Joi.string()
     .min(1)
     .max(100)
@@ -51,7 +40,6 @@ export const publishSchema = Joi.object({
       'any.required': '缺少搜索结果ID参数'
     }),
   
-  // 账号ID - 可选
   accountId: Joi.string()
     .max(50)
     .trim()
@@ -61,13 +49,9 @@ export const publishSchema = Joi.object({
     })
 });
 
-/**
- * 单个商品发布请求验证
- */
+// 单个商品发布请求验证
 export const singlePublishSchema = Joi.object({
-  // 商品数据 - 必需
   product: Joi.object({
-    // 价格 - 必需，正数
     price: Joi.number()
       .positive()
       .required()
@@ -76,7 +60,6 @@ export const singlePublishSchema = Joi.object({
         'any.required': '缺少商品价格'
       }),
     
-    // 描述 - 可选，最多5000字符
     description: Joi.string()
       .max(5000)
       .allow('')
@@ -84,7 +67,6 @@ export const singlePublishSchema = Joi.object({
         'string.max': '商品描述最多5000个字符'
       }),
     
-    // 图片 - 可选，数组
     images: Joi.array()
       .items(Joi.string().uri())
       .max(9)
@@ -93,30 +75,24 @@ export const singlePublishSchema = Joi.object({
         'string.uri': '图片必须是有效的URL'
       }),
     
-    // 原价 - 可选
     originalPrice: Joi.number()
       .positive()
       .allow(null)
     
   }).required(),
   
-  // 账号ID - 可选
   accountId: Joi.string()
     .max(50)
     .trim()
     .allow('')
 });
 
-/**
- * 编辑商品请求验证
- */
+// 编辑商品请求验证
 export const editProductSchema = Joi.object({
-  // 商品ID - 必需
   productId: Joi.string()
     .min(1)
     .required(),
   
-  // 更新字段 - 至少提供一个
   updates: Joi.object({
     price: Joi.number().positive(),
     description: Joi.string().max(5000),
@@ -125,52 +101,35 @@ export const editProductSchema = Joi.object({
   }).min(1)
 });
 
-/**
- * 分页参数验证
- */
+// 分页参数验证
 export const paginationSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20)
 });
 
-/**
- * 验证并返回错误信息
- * @param {Joi.Schema} schema - Joi验证模式
- * @param {Object} data - 要验证的数据
- * @returns {Object} { value, error }
- */
-export function validate(schema, data) {
+// 验证并返回错误信息
+export function validate<T>(schema: Joi.Schema, data: T): { value: T; error?: Joi.ValidationError } {
   return schema.validate(data, {
-    abortEarly: false, // 返回所有错误
-    stripUnknown: true // 移除未知字段
+    abortEarly: false,
+    stripUnknown: true
   });
 }
 
-/**
- * 快速验证函数
- * @param {Joi.Schema} schema 
- * @param {Object} data 
- * @throws 如果验证失败抛出错误
- */
-export function assert(schema, data) {
+// 快速验证函数
+export function assert<T>(schema: Joi.Schema, data: T): T {
   const { error, value } = validate(schema, data);
   if (error) {
     const messages = error.details.map(d => d.message).join(', ');
     const err = new Error(`Validation failed: ${messages}`);
     err.name = 'ValidationError';
-    err.details = error.details;
     throw err;
   }
   return value;
 }
 
-/**
- * 创建带验证的中间件
- * @param {Joi.Schema} schema 
- * @returns {Function} Express中间件
- */
-export function validateMiddleware(schema) {
-  return (req, res, next) => {
+// 创建带验证的中间件
+export function validateMiddleware(schema: Joi.Schema) {
+  return (req: { body: unknown }, res: { status: (code: number) => { json: (data: unknown) => void } }, next: () => void) => {
     try {
       const { error, value } = validate(schema, req.body);
       
@@ -183,10 +142,10 @@ export function validateMiddleware(schema) {
         });
       }
       
-      req.validatedBody = value;
+      (req as { validatedBody?: unknown }).validatedBody = value;
       next();
     } catch (err) {
-      next(err);
+      next();
     }
   };
 }

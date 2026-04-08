@@ -9,7 +9,8 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
-    "start": "node src/api/server.js",
+    "build": "tsc",
+    "start": "node dist/api/server.js",
     "dev": "node --watch src/api/server.js",
     "queue": "node src/queue/index.js"
   },
@@ -35,6 +36,11 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.3.3",
     "vitest": "^1.2.0"
   }
 }
