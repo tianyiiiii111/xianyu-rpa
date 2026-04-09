@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust 3D Effect - Web Version</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="overlay">
+        <h1 class="title">3D EFFECT</h1>
+        <p class="subtitle">WebGL Powered by Three.js</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Rotation Speed</label>
+                <input type="range" id="rotationSpeed" min="0" max="2" step="0.1" value="1">
+            </div>
+            <div class="control-group">
+                <label>Orbit Speed</label>
+                <input type="range" id="orbitSpeed" min="0" max="3" step="0.1" value="1">
+            </div>
+            <div class="control-group">
+                <label>Emissive Intensity</label>
+                <input type="range" id="emissiveIntensity" min="0" max="2" step="0.1" value="1">
+            </div>
+        </div>
+        
+        <div class="stats">
+            <span id="fps">60 FPS</span>
+            <span id="objects">Objects: 5</span>
+        </div>
+    </div>
+    
+    <div class="loading" id="loading">
+        <div class="loader"></div>
+        <p>Loading 3D Scene...</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
