@@ -8,7 +8,7 @@
  * 4. 编辑已采集的商品信息
  * 
  * 注释说明：
- * - 本文件是搜索服务的核心模块，负责商品的批量采集和管理
+ * - 本文件是搜索服务的核心模块，负责商品的批量采集和管理s
  * - 代码中添加了详细的注释，确保小白能理解
  * - 支持模拟数据和真实数据两种模式
  */
@@ -101,39 +101,9 @@ async function scrapeSearchResults(page) {
   // 遍历链接，获取每个商品的详细信息
   for (const link of productLinks) {
     try {
-      // 构造完整的商品URL
-      const productUrl = link;
-      
-      // 打开商品详情页
-      await page.goto(productUrl, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
 
-      // 等待页面加载
-      await humanDelay(1500, 2500);
-
-      // 提取商品信息
-      const productInfo = await page.evaluate(() => {
-        // 获取商品价格
-        const priceEl = document.querySelector('.price--OEWLbcxC ');
-        const priceText = priceEl ? priceEl.textContent.trim() : '0';
-        const price = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
-
-        // 获取商品描述
-        const descEl = document.querySelector('.main--Nu33bWl6');
-        const description = descEl ? descEl.textContent.trim() : '';
-
-        // 获取商品图片
-        const imgEls = document.querySelectorAll('.item-main-window-list--od7DK4Fm img');
-        const images = Array.from(imgEls).slice(0, 5).map(img => img.src).filter(src => src);
-
-        return {
-          price,
-          description,
-          images,
-        };
-      });
+      // 抓取单个商品详情
+      const productInfo = await extractProductDetails(page, link);
 
       // 生成商品ID
       const productId = `product_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -141,7 +111,7 @@ async function scrapeSearchResults(page) {
       // 构建商品对象
       const product = {
         id: productId,
-        url: productUrl,
+        url: link,
         ...productInfo,
         crawledAt: new Date().toISOString()
       };
@@ -163,56 +133,51 @@ async function scrapeSearchResults(page) {
 }
 
 /**
+ * 提取商品详情信息
+ * @param {Object} page - Playwright 页面对象
+ * @param {string} productUrl - 商品详情页 URL
+ * @returns {Promise<Object>} 商品信息对象，包含价格、描述和图片
+ */
+export async function extractProductDetails(page, productUrl) {
+  // 打开商品详情页
+  await page.goto(productUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30000,
+  });
+
+  // 等待页面加载
+  await humanDelay(1500, 2500);
+
+  // 提取商品信息
+  const productInfo = await page.evaluate(() => {
+    // 获取商品价格
+    const priceEl = document.querySelector('.price--OEWLbcxC ');
+    const priceText = priceEl ? priceEl.textContent.trim() : '0';
+    const price = parseFloat(priceText.replace(/[^\d.]/g, '')) || 0;
+
+    // 获取商品描述
+    const descEl = document.querySelector('.main--Nu33bWl6');
+    const description = descEl ? descEl.innerText : '';
+
+    // 获取商品图片
+    const imgEls = document.querySelectorAll('.item-main-window-list--od7DK4Fm img');
+    const images = Array.from(imgEls).slice(0, 5).map(img => img.src).filter(src => src);
+
+    return {
+      price,
+      description,
+      images,
+    };
+  });
+
+  return productInfo;
+}
+
+/**
  * 获取指定搜索结果
  * @param {string} searchId - 搜索ID
  * @returns {Object} 搜索结果
  */
 export function getSearchResults(searchId) {
   return StorageService.getSearchResults(searchId);
-}
-
-/**
- * 删除搜索结果
- * @param {string} searchId - 搜索ID
- * @returns {boolean} 是否删除成功
- */
-export function deleteSearchResults(searchId) {
-  return StorageService.deleteSearchResults(searchId);
-}
-
-/**
- * 编辑单个商品信息
- * @param {string} searchId - 搜索ID
- * @param {string} productId - 商品ID
- * @param {Object} updates - 要更新的商品信息
- * @returns {boolean} 是否编辑成功
- */
-export function editProduct(searchId, productId, updates) {
-  console.log(`\n✏️  编辑商品: ${productId}`);
-  
-  // 获取搜索结果
-  const searchResults = StorageService.getSearchResults(searchId);
-  if (!searchResults) {
-    console.error('❌ 搜索结果不存在');
-    return false;
-  }
-  
-  // 查找商品
-  const productIndex = searchResults.products.findIndex(p => p.id === productId);
-  if (productIndex === -1) {
-    console.error('❌ 商品不存在');
-    return false;
-  }
-  
-  // 更新商品信息
-  searchResults.products[productIndex] = {
-    ...searchResults.products[productIndex],
-    ...updates
-  };
-  
-  // 保存更新后的搜索结果
-  StorageService.saveSearchResults(searchId, searchResults);
-  
-  console.log(`✅ 商品编辑成功`);
-  return true;
 }

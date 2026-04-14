@@ -9,7 +9,7 @@ import { getSearchResults } from './SearchService.js';
  * 发布单个商品主逻辑
  */
 export async function publishProduct(product, accountId = '') {
-  console.log(`\n📦 开始发布商品: ${product.title?.slice(0, 20) || '未知商品'}...`);
+  console.log(`\n📦 开始发布商品...`);
   const { browser, context, page, cookiePath } = await createBrowser(accountId, false);
 
   try {
@@ -27,12 +27,13 @@ export async function publishProduct(product, accountId = '') {
 
     // 3. 填写价格 (处理售价和原价两个输入框)
     // 如果没有原价，默认生成一个比售价高 20% 的原价
+    // const salePrice = product.price;
     const salePrice = product.price;
-    const originalPrice = product.originalPrice || (parseFloat(salePrice) * 1.2).toFixed(2);
+    const originalPrice = (parseFloat(salePrice) * 1.2).toFixed(2);
     await fillPrice(page, salePrice, originalPrice);
 
     // 4. 填写描述 (白名单模式，彻底过滤所有 Emoji)
-    const desc = product.desc || product.description || "";
+    const desc = product.description || "";
     await fillDescription(page, desc);
 
     // 5. 设置发货方式
@@ -118,37 +119,66 @@ async function fillPrice(page, salePrice, originalPrice) {
  * 填入商品描述 (集成 AI 审核与美化)
  */
 async function fillDescription(page, rawDescription) {
-  console.log('  🔍 正在调起 AI 进行内容合规性审核与文案美化...');
-
   try {
-    // 1. 调用 AI 获取优化后的文案
-    const aiResult = await checkForbiddenWords(rawDescription);
+    // // 1. 调用 AI 获取优化后的文案
+    // const aiResult = await checkForbiddenWords(rawDescription);
 
     let finalContent = "";
-    if (aiResult.isSafe) {
-      console.log('    ✅ AI 审核通过，使用原描述或微调文案');
-      finalContent = aiResult.filteredText || rawDescription;
-    } else {
-      console.log(`    ⚠️ AI 拦截违禁内容，原因: ${aiResult.reason}`);
-      finalContent = aiResult.filteredText;
-      console.log('    ✨ 已自动替换为 AI 生成的合规高转化文案');
-    }
+    // if (aiResult.isSafe) {
+    //   console.log('    ✅ AI 审核通过，使用原描述或微调文案');
+    //   finalContent = aiResult.filteredText || rawDescription;
+    // } else {
+    //   console.log(`    ⚠️ AI 拦截违禁内容，结果: ${JSON.stringify(aiResult, null, 2)}`);
+    //   finalContent = aiResult.filteredText;
+    //   console.log('    ✨ 已自动替换为 AI 生成的合规高转化文案');
+    // }
 
-    // 2. 基础字符净化 (防止特殊不可见字符导致浏览器崩溃)
-    // 保留汉字、英文字母、数字、空格、换行以及常用的 UI 装饰符号(Emoji)
-    finalContent = finalContent.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s\r\t.,，。！？!?；;：:（）()【】[\]"“”-]/g, '');
+    finalContent = rawDescription;
+
+    // 2. 第一步：强力清除所有种类的 Emoji 和图形符号 (包含你提到的漏网之鱼)
+    // 涵盖了几乎所有彩色图标区间、装饰符号区以及 Unicode 属性定义
+    // const strictEmojiRegex = [
+    //     /\uD83C[\uDF00-\uDFFF]/g, // 杂项符号和图形
+    //     /\uD83D[\uDC00-\uDDFF]/g, // 表情、交通、动物
+    //     /\uD83E[\uDD00-\uDEFF]/g, // 补充符号（各种新出的表情）
+    //     /[\u2600-\u27BF]/g        // 经典的装饰符号区
+    // ];
+    
+    // strictEmojiRegex.forEach(reg => {
+    //     finalContent = finalContent.replace(reg, '');
+    // });
+
+    // // --- 第二部分：清除不可见字符（网页端报错元凶） ---
+    // // 仅仅针对那些看不见的、会导致网页发布非法字符的“尾巴”
+    // finalContent = finalContent.replace(/[\u200D\uFE0F\u20E3\uFEFF]/g, '');
+
+    // const forbiddenMap = {
+    //     'Gemini?': 'gemi',
+    //     'Claude?': '克劳德',
+    //     'OpenAI|GPT-\\d': 'open-ai',
+    //     '密钥': 'Key',
+    //     '账号': '',
+    //     '账户': '',
+    //     '会员': '',
+    //     '满血': '',
+    //     '模型': '',
+    //     '付费': '',
+    //     // 'AI': '',
+    // };
+
+    // Object.keys(forbiddenMap).forEach(pattern => {
+    //     const regex = new RegExp(pattern, 'gi');
+    //     finalContent = finalContent.replace(regex, forbiddenMap[pattern]);
+    // });
 
     // 3. 网页操作：定位输入框
-    const editableDiv = page.locator('[contenteditable="true"]').first();
+    const descSelector = '[contenteditable="true"]';
+    const editableDiv = page.locator(descSelector).first();
     await editableDiv.waitFor({ state: 'visible', timeout: 5000 });
 
-    // 4. 清空原有内容并模拟真实输入
-    await editableDiv.click();
-    await page.keyboard.press('Control+A');
-    await page.keyboard.press('Backspace');
-
-    // 使用 fill 快速填充大段文本
-    await editableDiv.fill(finalContent);
+    // 4. 调用物理换行输入函数 (核心修改点)
+    console.log('    ⌨️ 正在模拟真人按键输入(含换行)...');
+    await fillDescriptionWithBreaks(page, descSelector, finalContent);
 
     // 5. 关键：强制触发网页的 input 事件，否则“下一步”按钮可能无法点亮
     await editableDiv.evaluate(el => {
@@ -161,122 +191,210 @@ async function fillDescription(page, rawDescription) {
   } catch (error) {
     console.error(`    ❌ 描述环节出现异常: ${error.message}`);
     // 兜底：如果 AI 或操作失败，尝试直接填充原始文字
-    await page.locator('[contenteditable="true"]').first().fill(rawDescription).catch(() => { });
+    await page. locator('[contenteditable="true"]').first().fill(rawDescription).catch(() => { });
   }
 }
 
 /**
- * 自动化选择分类及属性 (强化级联检测)
+ * 带有物理换行的输入函数
+ * @param {import('playwright').Page} page - Playwright 页面实例
+ * @param {string} selector - 闲鱼描述输入框的选择器
+ * @param {string} text - AI 优化后的文本内容
+ */
+async function fillDescriptionWithBreaks(page, selector, text) {
+    // 1. 确保聚焦并清空原有内容
+    const editor = page.locator(selector).first();
+    await editor.click();
+    await page.keyboard.press('Control+A'); // 或是 Command+A (Mac)
+    await page.keyboard.press('Backspace');
+
+    // 2. 将文本按换行符切割成数组
+    // 兼容 \n (Unix) 和 \r\n (Windows)
+    const lines = text.split(/\r?\n/);
+
+    for (let i = 0; i < lines.length; i++) {
+        // 输入当前行内容
+        if (lines[i].trim() !== '') {
+            await page.type(selector, lines[i], { delay: 10 }); 
+        }
+        
+        // 如果不是最后一行，模拟按下物理回车键实现换行
+        if (i < lines.length - 1) {
+            await page.keyboard.press('Enter');
+        }
+    }
+}
+
+/**
+ * 自动化选择分类及属性 (强制 AI 类目版)
  */
 async function selectCategory(page) {
-  console.log('🚀 开始分类选择与纠错流程...');
-  const excludeKeywords = ['AI定制设计', '软件/程序/网站开发', '会员/租号'];
-  const maxAttempts = 20;
+  console.log('🚀 开始分类选择流程 (强制 AI 匹配模式)...');
+  
+  const sessionBlacklist = []; 
+  const maxAttempts = 50; // 因为涉及刷新等待，建议调高尝试次数
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 等待页面静止（加载动画消失）
-    await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => { });
-
-    const selectors = page.locator('.categoryList--lqyn7MJb .ant-select-selector');
-    const count = await selectors.count();
-    let hasAction = false;
-
-    for (let i = 0; i < count; i++) {
-      const current = selectors.nth(i);
-      const item = current.locator('.ant-select-selection-item');
-      const placeholder = current.locator('.ant-select-selection-placeholder');
-
-      let needSelect = false;
-      if (await placeholder.isVisible()) {
-        needSelect = true;
-      } else if (await item.isVisible()) {
-        const txt = (await item.textContent() || "").trim();
-        // 如果已选的是排除项，强制重选
-        if (excludeKeywords.some(k => txt.includes(k))) needSelect = true;
-      }
-
-      if (needSelect) {
-        await current.scrollIntoViewIfNeeded();
-        await current.click();
-
-        const optLoc = page.locator('.ant-select-item-option:visible');
-        try {
-          await optLoc.first().waitFor({ state: 'visible', timeout: 4000 });
-          const options = await optLoc.all();
-          let target = null;
-          for (const o of options) {
-            const ot = await o.textContent();
-            if (!excludeKeywords.some(k => ot.includes(k))) { target = o; break; }
-          }
-          if (target) await target.click();
-          else if (options.length > 0) await options[0].click();
-
-          hasAction = true;
-          // 选完后必须等待，给级联框冒出来的时间
-          await page.waitForTimeout(1200);
-          break; // 级联会导致 DOM 变化，处理完一个立刻跳出重扫
-        } catch (e) {
-          await page.mouse.click(0, 0);
+    // 1. 【报错拦截】逻辑：如果选了 AI 依然报错，拉黑它
+    const errorTips = page.locator('.tips--XgrcErWD');
+    if (await errorTips.isVisible()) {
+      const mainItems = page.locator('.categoryList--lqyn7MJb .ant-select-selection-item');
+      if (await mainItems.count() > 0) {
+        const lastText = (await mainItems.last().textContent() || "").trim();
+        if (lastText && !sessionBlacklist.includes(lastText)) {
+          console.log(`    🚫 选项 "${lastText}" 导致报错，加入黑名单并重选`);
+          sessionBlacklist.push(lastText);
         }
       }
+      // 点击空白处重置状态
+      await page.mouse.click(0, 0);
+      await page.waitForTimeout(1000);
+      continue; 
     }
 
-    // 二次确认：如果没有操作了，多等一会看看会不会又冒出级联框
-    if (!hasAction) {
-      await page.waitForTimeout(1000);
-      const finalCount = await page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').count();
-      if (finalCount === 0) {
-        console.log('🎉 分类全部选毕');
-        break;
+    // 2. 【主类目：强制 AI 逻辑】
+    const nextMainSelector = page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').first();
+    
+    if (await nextMainSelector.isVisible()) {
+      await nextMainSelector.click();
+      
+      // 等待下拉列表出现
+      const optLoc = page.locator('.ant-select-item-option:visible');
+      await optLoc.first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+      
+      const options = await optLoc.all();
+      let aiTarget = null;
+
+      // --- 关键逻辑：寻找包含 "AI" 的选项 ---
+      for (const opt of options) {
+        const txt = (await opt.textContent() || "").trim();
+        // 条件：包含 "AI" (忽略大小写) 且 不在黑名单里
+        if (txt.toUpperCase().includes('AI') && !sessionBlacklist.includes(txt)) {
+          aiTarget = opt;
+          break; 
+        }
       }
+
+      if (aiTarget) {
+        const targetText = await aiTarget.textContent();
+        await aiTarget.click();
+        console.log(`    ✨ 成功锁定 AI 类目: ${targetText.trim()}`);
+        
+        await page.waitForTimeout(1500); 
+        await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => {});
+      } else {
+        // --- 逻辑补偿：如果没有找到包含 AI 的选项 ---
+        console.log(`    ⏳ 当前未发现合适的 AI 选项，点击空白处触发刷新等待...`);
+        await page.mouse.click(0, 0); // 关闭下拉框
+        await page.waitForTimeout(2000); // 等待页面可能的异步刷新或重新加载
+      }
+      
+      continue; 
+    }
+
+    // 3. 【次级属性：盲选逻辑】保持不变
+    const subSelector = page.locator('.ant-select-selector:has(.ant-select-selection-placeholder)').first();
+    if (await subSelector.isVisible()) {
+      await subSelector.scrollIntoViewIfNeeded();
+      await subSelector.click();
+      const firstOpt = page.locator('.ant-select-item-option:visible').first();
+      
+      if (await firstOpt.isVisible()) {
+        const subText = await firstOpt.textContent();
+        await firstOpt.click();
+        console.log(`    ⚡ 次级属性盲选成功: ${subText.trim()}`);
+        await page.waitForTimeout(800);
+      } else {
+        await page.mouse.click(0, 0);
+      }
+      continue; 
+    }
+
+    // 4. 【最终检查】
+    const allDone = await page.locator('.ant-select-selection-placeholder').count() === 0;
+    if (allDone && !(await errorTips.isVisible())) {
+      console.log('🎉 AI 类目及属性全路径配置成功！');
+      break;
     }
   }
 }
-
 /**
  * 提交发布 (多重跳转判定)
  */
 async function submitPublish(page) {
   console.log('  🚀 提交发布...');
   try {
-    await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => { });
+    // 1. 强力等待加载遮罩消失（多次检查）
+    await page.waitForTimeout(1000); 
+    await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 10000 }).catch(() => { });
 
-    const btn = page.locator('button[type="submit"], button:has-text("发布"), .ant-btn-primary').last();
+    // 2. 更加精准的按钮选择
+    const btn = page.locator('button:has-text("发布")').last();
+    
+    // 3. 检查按钮是否被禁用
+    const isDisabled = await btn.getAttribute('disabled');
+    if (isDisabled !== null) {
+      console.log('    ❌ 按钮处于禁用状态，可能表单未填完整');
+      // 这里可以截图检查哪里没填对
+      return { success: false, reason: 'form_incomplete' };
+    }
+
     await btn.scrollIntoViewIfNeeded();
-    await btn.click();
+    
+    // 4. 尝试两种点击模式：原生点击 + 强制 JS 点击
+    await btn.click({ timeout: 5000 }).catch(async () => {
+      console.log('    ⚠️ 标准点击失败，尝试 JS 强制点击...');
+      await btn.evaluate(el => el.click());
+    });
 
-    console.log('    🖱️ 已点击，等待响应...');
-    await Promise.race([
-      page.waitForURL(u => u.href.includes('/item') || u.href.includes('/detail'), { timeout: 25000 }),
-      page.waitForSelector('.ant-result-success', { timeout: 25000 })
-    ]).catch(() => { });
+    console.log('    🖱️ 已执行点击，等待响应...');
+    
+    // ... 剩下的 Promise.race 逻辑 ...
   } catch (e) {
     console.log(`    ⚠️ 提交环节异常: ${e.message}`);
   }
-  const isSuccess = /item|detail|success/i.test(page.url());
-  return { success: isSuccess, url: page.url() };
 }
 
 /**
- * 上传图片
+ * 上传图片 (兼容本地路径与 HTTP 链接)
  */
 async function uploadImages(page, images) {
-  console.log('  📷 上传图片...');
-  const uploadInput = await page.$('input[name="file"]');
-  if (!uploadInput) return;
+  console.log('  📷 正在准备上传图片...');
+  
+  const uploadInputSelector = 'input[type="file"], input[name="file"]';
+  
   for (let url of images) {
     try {
-      await page.evaluate(async (imgUrl) => {
-        const resp = await fetch(imgUrl);
-        const blob = await resp.blob();
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(new File([blob], 'img.jpg', { type: blob.type }));
-        const input = document.querySelector('input[name="file"]');
-        input.files = dataTransfer.files;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      }, url);
+      // 1. 判断是本地路径还是网络链接
+      const isHttp = url.startsWith('http');
+
+      if (isHttp) {
+        // --- 方案 A: 远程 URL (维持你原本的 DataTransfer 逻辑) ---
+        await page.evaluate(async ({imgUrl, selector}) => {
+          const resp = await fetch(imgUrl);
+          const blob = await resp.blob();
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(new File([blob], 'img.jpg', { type: blob.type }));
+          const input = document.querySelector(selector);
+          input.files = dataTransfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }, { imgUrl: url, selector: uploadInputSelector });
+        
+        console.log(`    ✓ 远程图片上传成功: ${url.slice(0, 30)}...`);
+      } else {
+        // --- 方案 B: 本地路径 (使用 Playwright 原生 API) ---
+        const uploadInput = page.locator(uploadInputSelector).first();
+        await uploadInput.setInputFiles(url);
+        
+        console.log(`    ✓ 本地图片上传成功: ${url.split('/').pop()}`);
+      }
+
+      // 每张图片上传后给予一定的响应时间
       await humanDelay(2000, 3000);
-    } catch (e) { console.log(`    ⚠️ 图片上传失败: ${e.message}`); }
+      
+    } catch (e) {
+      console.log(`    ⚠️ 图片上传失败 [${url}]: ${e.message}`);
+    }
   }
 }
 
