@@ -124,7 +124,7 @@ async function fillDescription(page, rawDescription) {
     // const aiResult = await checkForbiddenWords(rawDescription);
 
     let finalContent = "";
-    // if (aiResult.isSafe) {
+    // if (aiResult.isSafe) { 
     //   console.log('    ✅ AI 审核通过，使用原描述或微调文案');
     //   finalContent = aiResult.filteredText || rawDescription;
     // } else {
@@ -226,98 +226,90 @@ async function fillDescriptionWithBreaks(page, selector, text) {
 }
 
 /**
- * 自动化选择分类及属性 (强制 AI 类目版)
+ * 自动化选择分类 (修正版：强制重选第一级)
  */
 async function selectCategory(page) {
-  console.log('🚀 开始分类选择流程 (强制 AI 匹配模式)...');
+  console.log('🚀 开始分类选择流程 (强制 AI 校验版)...');
   
   const sessionBlacklist = []; 
-  const maxAttempts = 50; // 因为涉及刷新等待，建议调高尝试次数
+  const maxAttempts = 30; 
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1. 【报错拦截】逻辑：如果选了 AI 依然报错，拉黑它
-    const errorTips = page.locator('.tips--XgrcErWD');
-    if (await errorTips.isVisible()) {
-      const mainItems = page.locator('.categoryList--lqyn7MJb .ant-select-selection-item');
-      if (await mainItems.count() > 0) {
-        const lastText = (await mainItems.last().textContent() || "").trim();
-        if (lastText && !sessionBlacklist.includes(lastText)) {
-          console.log(`    🚫 选项 "${lastText}" 导致报错，加入黑名单并重选`);
-          sessionBlacklist.push(lastText);
-        }
-      }
-      // 点击空白处重置状态
-      await page.mouse.click(0, 0);
-      await page.waitForTimeout(1000);
-      continue; 
+    // 1. 获取所有选择框
+    const categoryBoxes = page.locator('.categoryList--lqyn7MJb .ant-select-selector');
+    if (await categoryBoxes.count() === 0) {
+        await page.waitForTimeout(1000);
+        continue;
     }
 
-    // 2. 【主类目：强制 AI 逻辑】
-    const nextMainSelector = page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').first();
+    // 2. 检查第一个框的内容
+    const firstBox = categoryBoxes.first();
+    const firstBoxText = (await firstBox.textContent() || "").trim();
     
-    if (await nextMainSelector.isVisible()) {
-      await nextMainSelector.click();
-      
-      // 等待下拉列表出现
-      const optLoc = page.locator('.ant-select-item-option:visible');
-      await optLoc.first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
-      
-      const options = await optLoc.all();
-      let aiTarget = null;
+    // 判定：第一个框是否已经包含 AI 且 不是初始提示
+    const isFirstBoxAI = firstBoxText.toUpperCase().includes('AI') && 
+                         !await firstBox.locator('.ant-select-selection-placeholder').isVisible();
 
-      // --- 关键逻辑：寻找包含 "AI" 的选项 ---
+    let targetBox;
+    let mode = "";
+
+    if (!isFirstBoxAI) {
+      // --- 关键修改：如果第一个不是 AI，强制只操作第一个框 ---
+      console.log(`    ⚠️ 主类目当前为: "${firstBoxText}"，不符合 AI 准入，强制重选...`);
+      targetBox = firstBox;
+      mode = "AI_ONLY";
+    } else {
+      // 第一个已经是 AI 了，寻找下一个待填的占位符
+      const nextPlaceholder = page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').first();
+      if (await nextPlaceholder.isVisible()) {
+        targetBox = nextPlaceholder;
+        mode = "BLIND_PICK";
+      } else {
+        // 没有占位符了，可能已经选完了
+        const allFilled = await page.locator('.ant-select-selection-placeholder').count() === 0;
+        if (allFilled) break;
+        continue;
+      }
+    }
+
+    // 3. 执行点击和选择
+    await targetBox.click();
+    const optLoc = page.locator('.ant-select-item-option:visible');
+    await optLoc.first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    
+    const options = await optLoc.all();
+    let selectedOpt = null;
+
+    if (mode === "AI_ONLY") {
+      // 过滤模式
       for (const opt of options) {
         const txt = (await opt.textContent() || "").trim();
-        // 条件：包含 "AI" (忽略大小写) 且 不在黑名单里
         if (txt.toUpperCase().includes('AI') && !sessionBlacklist.includes(txt)) {
-          aiTarget = opt;
+          selectedOpt = opt;
           break; 
         }
       }
-
-      if (aiTarget) {
-        const targetText = await aiTarget.textContent();
-        await aiTarget.click();
-        console.log(`    ✨ 成功锁定 AI 类目: ${targetText.trim()}`);
-        
-        await page.waitForTimeout(1500); 
-        await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => {});
-      } else {
-        // --- 逻辑补偿：如果没有找到包含 AI 的选项 ---
-        console.log(`    ⏳ 当前未发现合适的 AI 选项，点击空白处触发刷新等待...`);
-        await page.mouse.click(0, 0); // 关闭下拉框
-        await page.waitForTimeout(2000); // 等待页面可能的异步刷新或重新加载
-      }
-      
-      continue; 
+    } else {
+      // 盲选模式
+      selectedOpt = options[0];
     }
 
-    // 3. 【次级属性：盲选逻辑】保持不变
-    const subSelector = page.locator('.ant-select-selector:has(.ant-select-selection-placeholder)').first();
-    if (await subSelector.isVisible()) {
-      await subSelector.scrollIntoViewIfNeeded();
-      await subSelector.click();
-      const firstOpt = page.locator('.ant-select-item-option:visible').first();
-      
-      if (await firstOpt.isVisible()) {
-        const subText = await firstOpt.textContent();
-        await firstOpt.click();
-        console.log(`    ⚡ 次级属性盲选成功: ${subText.trim()}`);
-        await page.waitForTimeout(800);
-      } else {
-        await page.mouse.click(0, 0);
-      }
-      continue; 
-    }
-
-    // 4. 【最终检查】
-    const allDone = await page.locator('.ant-select-selection-placeholder').count() === 0;
-    if (allDone && !(await errorTips.isVisible())) {
-      console.log('🎉 AI 类目及属性全路径配置成功！');
-      break;
+    if (selectedOpt) {
+      const txt = await selectedOpt.textContent();
+      await selectedOpt.click();
+      console.log(`    ✨ [${mode}] 已选择: ${txt.trim()}`);
+      await page.waitForTimeout(1500);
+      await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => {});
+    } else {
+      console.log(`    ⏳ 未找到合适选项，点击空白处重试...`);
+      await page.mouse.click(0, 0);
+      await page.waitForTimeout(2000);
     }
   }
+  console.log('🎉 分类选择任务结束');
 }
+
+
 /**
  * 提交发布 (多重跳转判定)
  */

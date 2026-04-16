@@ -3,15 +3,21 @@ import { getRandomProduct } from './src/utils/resource.js';
 import { humanDelay } from './src/utils/browser.js';
 import { publishProduct } from './src/services/PublishService.js';
 
-// const price = parseFloat((Math.random() * 0.5 + 0.5).toFixed(1)); // 价格随机在0.5到1.0之间，保留一位小数
-const price = 1;
+// 设置价格波动的最小值和最大值
+const MIN_PRICE = 2.0;
+const MAX_PRICE = 6.0;
+
+// 计算随机价格逻辑
+// (Math.random() * (max - min) + min) 是生成特定区间随机数的标准公式
+const price = parseFloat((Math.random() * (MAX_PRICE - MIN_PRICE) + MIN_PRICE).toFixed(1));
 
 // 发布次数
-const pushCount = 1;
+const pushCount = 10;
 
 const accountIds = [
     'huazhongkandianyingdehaitunsha',
     // 'dadishangdeyipianyezi',
+    // 'xibanyakanwangjudehaiwoniu',
 ];
 
 for (const accountId of accountIds) {
