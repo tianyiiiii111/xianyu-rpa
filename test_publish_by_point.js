@@ -3,37 +3,40 @@ import { getRandomProduct } from './src/utils/resource.js';
 import { humanDelay } from './src/utils/browser.js';
 import { publishProduct } from './src/services/PublishService.js';
 
-// 设置价格波动的最小值和最大值
-const MIN_PRICE = 2.0;
+// 固定价格
+const MIN_PRICE = 2.0;  
 const MAX_PRICE = 2.0;
 
 // 计算随机价格逻辑
 // (Math.random() * (max - min) + min) 是生成特定区间随机数的标准公式
-const price = parseFloat((Math.random() * (MAX_PRICE - MIN_PRICE) + MIN_PRICE).toFixed(1));
+// const price = parseFloat((Math.random() * (MAX_PRICE - MIN_PRICE) + MIN_PRICE).toFixed(1));
+const price = 0.01;
 
-// 发布次数
-const pushCount = 10;
+const accountIds = ['beizhoujuzhongdezhima'];
 
-const accountIds = [
-    // 'huazhongkandianyingdehaitunsha',
-    'dadishangdeyipianyezi',
-    'beizhoujuzhongdezhima',
-    // 'xibanyakanwangjudehaiwoniu',
+const title = "Image 2 G皮提、香蕉Pro、NanoBanan 2、即梦、无限画布AI生成试用每月限购一单";
+const points = [
+    '无限使用',
+    '不限次数',
+    '年度会员',
+    '国内直连/无需魔法',
+    '自动秒发',
+    '一年畅用',
+    '积分会员'      
 ];
-
-const title = "Image 2 G皮提、香蕉Pro、NanoBanan 2、即梦、无限画布AI生成试用每月限购一单 ";
-const points = [''];
 
 
 for (const accountId of accountIds) {
     console.log(`🚀 开始为账号 [${accountId}] 发布商品...`);
 
-    // 循环发布
-    for (let i = 0; i < pushCount; i++) {
+    // 遍历points数组，每个point发布一次
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        
         // --- 核心修改：直接获取匹配好的随机产品包 ---
         let { category, images, description } = getRandomProduct();
 
-        description = `${title} ${points[Math.floor(Math.random() * points.length)]}\n` + description;
+        description = `${title} ${point}\n` + description;
 
         // 健壮性检查：如果没有图片，跳过本次循环
         if (images.length === 0) {
@@ -53,13 +56,13 @@ for (const accountId of accountIds) {
         try {
             // 执行发布
             await publishProduct(productInfo, accountId);
-            console.log(`✅ [${category}] 已成功发布第 ${i + 1} 个商品`);
+            console.log(`✅ [${category}] 已成功发布包含关键词 "${point}" 的商品`);
         } catch (error) {
-            console.error(`❌ 第 ${i + 1} 个商品发布失败:`, error.message);
+            console.error(`❌ 发布包含关键词 "${point}" 的商品失败:`, error.message);
         }
 
         // 添加随机延迟，避免请求过快
         // 建议发布后的延迟稍微长一点，模拟真人操作
         await humanDelay(3000, 5000);
     }
-}
+}      

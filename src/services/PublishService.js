@@ -143,7 +143,7 @@ async function fillDescription(page, rawDescription) {
     //     /\uD83E[\uDD00-\uDEFF]/g, // 补充符号（各种新出的表情）
     //     /[\u2600-\u27BF]/g        // 经典的装饰符号区
     // ];
-    
+
     // strictEmojiRegex.forEach(reg => {
     //     finalContent = finalContent.replace(reg, '');
     // });
@@ -191,7 +191,7 @@ async function fillDescription(page, rawDescription) {
   } catch (error) {
     console.error(`    ❌ 描述环节出现异常: ${error.message}`);
     // 兜底：如果 AI 或操作失败，尝试直接填充原始文字
-    await page. locator('[contenteditable="true"]').first().fill(rawDescription).catch(() => { });
+    await page.locator('[contenteditable="true"]').first().fill(rawDescription).catch(() => { });
   }
 }
 
@@ -202,113 +202,115 @@ async function fillDescription(page, rawDescription) {
  * @param {string} text - AI 优化后的文本内容
  */
 async function fillDescriptionWithBreaks(page, selector, text) {
-    // 1. 确保聚焦并清空原有内容
-    const editor = page.locator(selector).first();
-    await editor.click();
-    await page.keyboard.press('Control+A'); // 或是 Command+A (Mac)
-    await page.keyboard.press('Backspace');
+  // 1. 确保聚焦并清空原有内容
+  const editor = page.locator(selector).first();
+  await editor.click();
+  await page.keyboard.press('Control+A'); // 或是 Command+A (Mac)
+  await page.keyboard.press('Backspace');
 
-    // 2. 将文本按换行符切割成数组
-    // 兼容 \n (Unix) 和 \r\n (Windows)
-    const lines = text.split(/\r?\n/);
+  // 2. 将文本按换行符切割成数组
+  // 兼容 \n (Unix) 和 \r\n (Windows)
+  const lines = text.split(/\r?\n/);
 
-    for (let i = 0; i < lines.length; i++) {
-        // 输入当前行内容
-        if (lines[i].trim() !== '') {
-            await page.type(selector, lines[i], { delay: 10 }); 
-        }
-        
-        // 如果不是最后一行，模拟按下物理回车键实现换行
-        if (i < lines.length - 1) {
-            await page.keyboard.press('Enter');
-        }
+  for (let i = 0; i < lines.length; i++) {
+    // 输入当前行内容
+    if (lines[i].trim() !== '') {
+      await page.type(selector, lines[i], { delay: 10 });
     }
+
+    // 如果不是最后一行，模拟按下物理回车键实现换行
+    if (i < lines.length - 1) {
+      await page.keyboard.press('Enter');
+    }
+  }
 }
 
 /**
- * 自动化选择分类 (修正版：强制重选第一级)
+ * 自动化选择分类及属性 (强制 AI 类目版)
  */
 async function selectCategory(page) {
-  console.log('🚀 开始分类选择流程 (强制 AI 校验版)...');
-  
-  const sessionBlacklist = []; 
-  const maxAttempts = 30; 
+  console.log('🚀 [主动覆盖模式] 启动...');
+  const sessionBlacklist = [];
+  const maxAttempts = 50;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 1. 获取所有选择框
-    const categoryBoxes = page.locator('.categoryList--lqyn7MJb .ant-select-selector');
-    if (await categoryBoxes.count() === 0) {
-        await page.waitForTimeout(1000);
-        continue;
-    }
+    console.log(`\n--- [第 ${attempt} 轮决策] ---`);
 
-    // 2. 检查第一个框的内容
-    const firstBox = categoryBoxes.first();
-    const firstBoxText = (await firstBox.textContent() || "").trim();
-    
-    // 判定：第一个框是否已经包含 AI 且 不是初始提示
-    const isFirstBoxAI = firstBoxText.toUpperCase().includes('AI') && 
-                         !await firstBox.locator('.ant-select-selection-placeholder').isVisible();
+    // 1. 【瞬时拦截】仅负责记录黑名单，不阻塞后续逻辑
+    const errorTips = page.locator('.tips--XgrcErWD');
+    const firstBox = page.locator('.categoryList--lqyn7MJb .ant-select-selector').first();
+    const firstText = (await firstBox.textContent() || "").trim();
 
-    let targetBox;
-    let mode = "";
-
-    if (!isFirstBoxAI) {
-      // --- 关键修改：如果第一个不是 AI，强制只操作第一个框 ---
-      console.log(`    ⚠️ 主类目当前为: "${firstBoxText}"，不符合 AI 准入，强制重选...`);
-      targetBox = firstBox;
-      mode = "AI_ONLY";
-    } else {
-      // 第一个已经是 AI 了，寻找下一个待填的占位符
-      const nextPlaceholder = page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').first();
-      if (await nextPlaceholder.isVisible()) {
-        targetBox = nextPlaceholder;
-        mode = "BLIND_PICK";
-      } else {
-        // 没有占位符了，可能已经选完了
-        const allFilled = await page.locator('.ant-select-selection-placeholder').count() === 0;
-        if (allFilled) break;
-        continue;
+    if (await errorTips.isVisible()) {
+      console.log(`📍 [拦截点] 检测到报错，当前选中: "${firstText}"`);
+      if (firstText && !sessionBlacklist.includes(firstText)) {
+        console.log(`🚫 [黑名单更新] 拉黑: "${firstText}"`);
+        sessionBlacklist.push(firstText);
       }
+      // 注意：这里不再执行 continue，让逻辑直接流向下面的“重选”判定
     }
 
-    // 3. 执行点击和选择
-    await targetBox.click();
-    const optLoc = page.locator('.ant-select-item-option:visible');
-    await optLoc.first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
-    
-    const options = await optLoc.all();
-    let selectedOpt = null;
+    // 2. 【准入与重选逻辑】
+    const hasPlaceholder = await firstBox.locator('.ant-select-selection-placeholder').isVisible();
+    const isNoAI = !firstText.toUpperCase().includes('AI');
+    const isBlacklisted = sessionBlacklist.includes(firstText);
 
-    if (mode === "AI_ONLY") {
-      // 过滤模式
+    // 只要处于报错状态（黑名单）或不合规，就触发重选
+    if (hasPlaceholder || isNoAI || isBlacklisted) {
+      console.log(`👉 [决策] "${firstText}" 不合法，立即切换新选项以消除错误...`);
+      
+      await firstBox.click({ force: true });
+      await page.waitForSelector('.ant-select-item-option:visible', { timeout: 3000 }).catch(() => {});
+      await page.waitForTimeout(500); // 短暂缓冲，确保列表渲染
+
+      const options = await page.locator('.ant-select-item-option:visible').all();
+      let aiTarget = null;
+
       for (const opt of options) {
         const txt = (await opt.textContent() || "").trim();
         if (txt.toUpperCase().includes('AI') && !sessionBlacklist.includes(txt)) {
-          selectedOpt = opt;
-          break; 
+          aiTarget = opt;
+          break;
         }
       }
-    } else {
-      // 盲选模式
-      selectedOpt = options[0];
+
+      if (aiTarget) {
+        const targetName = (await aiTarget.textContent()).trim();
+        console.log(`✨ [覆盖动作] 选中新选项: "${targetName}"，等待旧 tips 随之消失...`);
+        await aiTarget.click();
+        
+        // 【关键等待】选了新选项后，停留 2 秒，让页面有时间处理请求并让旧 tips 消失
+        await page.waitForTimeout(2000); 
+      } else {
+        console.log('💀 [无可选项] 尝试刷新页面状态...');
+        await page.mouse.click(0, 0);
+        await page.waitForTimeout(1000);
+      }
+      continue; 
     }
 
-    if (selectedOpt) {
-      const txt = await selectedOpt.textContent();
-      await selectedOpt.click();
-      console.log(`    ✨ [${mode}] 已选择: ${txt.trim()}`);
-      await page.waitForTimeout(1500);
-      await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 5000 }).catch(() => {});
-    } else {
-      console.log(`    ⏳ 未找到合适选项，点击空白处重试...`);
-      await page.mouse.click(0, 0);
-      await page.waitForTimeout(2000);
+    // 3. 【次级推进】
+    const subSelector = page.locator('.categoryList--lqyn7MJb .ant-select-selector:has(.ant-select-selection-placeholder)').first();
+    if (await subSelector.isVisible()) {
+      console.log('⚡ [次级推进] 主类目已合法，盲选次级属性...');
+      await subSelector.click();
+      await page.waitForTimeout(800);
+      const firstOpt = page.locator('.ant-select-item-option:visible').first();
+      if (await firstOpt.isVisible()) {
+        await firstOpt.click();
+        await page.waitForTimeout(1000);
+      }
+      continue;
+    }
+
+    // 4. 【最终检查】
+    const remaining = await page.locator('.ant-select-selection-placeholder').count();
+    if (remaining === 0 && !(await errorTips.isVisible())) {
+      console.log('🎉 类目全路径已正确锁定且无报错！');
+      break;
     }
   }
-  console.log('🎉 分类选择任务结束');
 }
-
 
 /**
  * 提交发布 (多重跳转判定)
@@ -317,12 +319,12 @@ async function submitPublish(page) {
   console.log('  🚀 提交发布...');
   try {
     // 1. 强力等待加载遮罩消失（多次检查）
-    await page.waitForTimeout(1000); 
+    await page.waitForTimeout(1000);
     await page.waitForSelector('.ant-spin-spinning', { state: 'hidden', timeout: 10000 }).catch(() => { });
 
     // 2. 更加精准的按钮选择
     const btn = page.locator('button:has-text("发布")').last();
-    
+
     // 3. 检查按钮是否被禁用
     const isDisabled = await btn.getAttribute('disabled');
     if (isDisabled !== null) {
@@ -332,7 +334,7 @@ async function submitPublish(page) {
     }
 
     await btn.scrollIntoViewIfNeeded();
-    
+
     // 4. 尝试两种点击模式：原生点击 + 强制 JS 点击
     await btn.click({ timeout: 5000 }).catch(async () => {
       console.log('    ⚠️ 标准点击失败，尝试 JS 强制点击...');
@@ -340,7 +342,7 @@ async function submitPublish(page) {
     });
 
     console.log('    🖱️ 已执行点击，等待响应...');
-    
+
     // ... 剩下的 Promise.race 逻辑 ...
   } catch (e) {
     console.log(`    ⚠️ 提交环节异常: ${e.message}`);
@@ -352,9 +354,9 @@ async function submitPublish(page) {
  */
 async function uploadImages(page, images) {
   console.log('  📷 正在准备上传图片...');
-  
+
   const uploadInputSelector = 'input[type="file"], input[name="file"]';
-  
+
   for (let url of images) {
     try {
       // 1. 判断是本地路径还是网络链接
@@ -362,7 +364,7 @@ async function uploadImages(page, images) {
 
       if (isHttp) {
         // --- 方案 A: 远程 URL (维持你原本的 DataTransfer 逻辑) ---
-        await page.evaluate(async ({imgUrl, selector}) => {
+        await page.evaluate(async ({ imgUrl, selector }) => {
           const resp = await fetch(imgUrl);
           const blob = await resp.blob();
           const dataTransfer = new DataTransfer();
@@ -371,19 +373,19 @@ async function uploadImages(page, images) {
           input.files = dataTransfer.files;
           input.dispatchEvent(new Event('change', { bubbles: true }));
         }, { imgUrl: url, selector: uploadInputSelector });
-        
+
         console.log(`    ✓ 远程图片上传成功: ${url.slice(0, 30)}...`);
       } else {
         // --- 方案 B: 本地路径 (使用 Playwright 原生 API) ---
         const uploadInput = page.locator(uploadInputSelector).first();
         await uploadInput.setInputFiles(url);
-        
+
         console.log(`    ✓ 本地图片上传成功: ${url.split('/').pop()}`);
       }
 
       // 每张图片上传后给予一定的响应时间
       await humanDelay(2000, 3000);
-      
+
     } catch (e) {
       console.log(`    ⚠️ 图片上传失败 [${url}]: ${e.message}`);
     }

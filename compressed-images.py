@@ -26,7 +26,7 @@ def compress_in_place(directory, quality=70):
                         # 直接保存回原路径，实现覆盖
                         img.save(file_path, "JPEG", optimize=True, quality=quality)
                     
-                    new_size = os.path.getsize(file_path)
+                    new_size = os.path.getsize(file_path)       
                     print(f"已覆盖: {file} | 压缩率: {((orig_size - new_size) / orig_size * 100):.1f}%")
                     count += 1
                 except Exception as e:

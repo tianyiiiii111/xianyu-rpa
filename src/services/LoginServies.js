@@ -16,11 +16,12 @@ export async function loginAndSaveCookie() {
 
     const browser = await chromium.launch({ 
         headless: false, 
-        args: ['--start-maximized'] 
+        args: ['--start-maximized']
     });
 
     const context = await browser.newContext({ viewport: null });
     const page = await context.newPage();
+    page.setDefaultTimeout(120000);
 
     try {
         await page.goto('https://www.goofish.com/', { waitUntil: 'networkidle' });
@@ -33,7 +34,7 @@ export async function loginAndSaveCookie() {
         await page.waitForFunction(() => {
             const el = document.querySelector('.item--m9jSTUup');
             return el && el.hasAttribute('href');
-        }, { timeout: 0 });
+        }, { timeout: 120000 });
 
         console.log('✅ 登录判定成功（已检测到 href 属性）');
 
